@@ -1,8 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import jwt
-from jwt import InvalidTokenError, ExpiredSignatureError
-import time
 
 
 app = FastAPI()
@@ -12,7 +10,7 @@ ISSUER = "https://idp.exam.local"
 AUDIENCE = "tds-dmw8zfd5.apps.exam.local"
 
 PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhki9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2okOHspNjgA+2rTLbeuY
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2okOHspNjgA+2rTLbeuY
 cxiP/hG8C6Sb9iwg3yiLAA4HCnpITcbWCSelbvbYGuc3EbNy4xFyf5Cbj5DHJMID
 EkryOgyd2giIIIBOUBj8S63uGcnRpOBh9NFatfNwheKuzsPuVNldu6A9cNteNpXc
 WyJjG2axVfmq7i6SuKr1JoWYG7xTTAvKPujSl4OtsQfO3h5NepzdfXpr28oNnzfW
@@ -27,22 +25,22 @@ class VerifyRequest(BaseModel):
 
 
 @app.post("/verify")
-def verify_token(body: VerifyRequest):
+def verify(body: VerifyRequest):
 
     try:
+        # First verify signature only
         payload = jwt.decode(
             body.token,
             PUBLIC_KEY,
             algorithms=["RS256"],
-            issuer=ISSUER,
-            audience=AUDIENCE,
             options={
-                "require": [
-                    "iss",
-                    "aud",
-                    "exp"
-                ]
-            }
+                "verify_signature": True,
+                "verify_exp": True,
+                "verify_aud": True,
+                "verify_iss": True
+            },
+            audience=AUDIENCE,
+            issuer=ISSUER
         )
 
         return {
@@ -52,11 +50,9 @@ def verify_token(body: VerifyRequest):
             "aud": payload.get("aud", "")
         }
 
-    except (
-        ExpiredSignatureError,
-        InvalidTokenError,
-        Exception
-    ):
+    except Exception as e:
+        print("JWT ERROR:", repr(e))
+
         raise HTTPException(
             status_code=401,
             detail={
